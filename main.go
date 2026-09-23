@@ -17,6 +17,8 @@ import (
 	"web2api/internal/router"
 )
 
+var version = "dev"
+
 func main() {
 	configPath := flag.String("config", "config.yaml", "配置文件路径")
 	flag.Parse()
@@ -53,6 +55,7 @@ func main() {
 	})
 
 	go func() {
+		log.Printf("web2api v%s 启动", version)
 		log.Printf("管理界面: http://%s:%d%s", sc.Host, sc.Port, sc.AdminPath)
 		log.Printf("API 服务: http://%s:%d/v1", sc.Host, sc.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
