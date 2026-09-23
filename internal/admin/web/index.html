@@ -178,24 +178,37 @@
   <div v-if="viewerShow" class="fixed inset-0 z-40 bg-black/90 flex flex-col items-center p-3">
     <div class="flex w-full max-w-4xl items-center gap-3 mb-2">
       <span class="font-medium capitalize">{{ viewerName }} 浏览器画面</span>
-      <span class="flex-1 text-xs text-slate-500">先在页面里点一下输入框聚焦，再在下方输入文字 · 点击 / 拖拽 / 滚轮操作页面</span>
+      <span class="flex-1 text-xs text-slate-500">轻点/点击操作 · 拖动=移动鼠标 · 下方方向按钮=滚动 · 先在页面里点一下输入框聚焦，再输入文字</span>
       <button @click="closeViewer" class="px-3 py-1 text-sm rounded-lg border border-slate-700 hover:bg-slate-800">关闭</button>
     </div>
     <div class="flex-1 w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-lg overflow-hidden relative">
       <img v-if="viewerImg" :src="viewerImg" alt="browser"
            class="w-full h-full object-contain select-none cursor-crosshair"
+           style="touch-action:none; -webkit-user-select:none"
            draggable="false"
            @mousedown="vMouse('down', $event)"
            @mousemove="vMouse('move', $event)"
            @mouseup="vMouse('up', $event)"
            @wheel.prevent="vScroll($event)"
-           @contextmenu.prevent>
+           @contextmenu.prevent
+           @touchstart.prevent="vTouchStart($event)"
+           @touchmove.prevent="vTouchMove($event)"
+           @touchend.prevent="vTouchEnd($event)">
       <div v-else class="h-full flex items-center justify-center text-slate-500 text-sm">
         {{ viewerErr || '连接中…' }}
       </div>
     </div>
-    <div class="w-full max-w-4xl flex gap-2 items-center mt-2">
-      <input v-model="vText" type="text" placeholder="输入文字（先点页面里的输入框让它聚焦）"
+    <div class="w-full max-w-4xl flex gap-1.5 items-center mt-2">
+      <!-- 手机没有滚轮：提供方向滚动按钮 -->
+      <button @click="vScrollBy(-600,0)" class="px-2.5 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600"
+              :title="'向左滚动'">←</button>
+      <button @click="vScrollBy(600,0)" class="px-2.5 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600"
+              :title="'向右滚动'">→</button>
+      <button @click="vScrollBy(0,-600)" class="px-2.5 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600"
+              :title="'向上滚动'">↑</button>
+      <button @click="vScrollBy(0,600)" class="px-2.5 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600"
+              :title="'向下滚动'">↓</button>
+      <input v-model="vText" type="text" placeholder="输入文字（先把光标点到页面输入框）"
              class="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm focus:border-sky-500 focus:outline-none"
              @keydown.enter.prevent="vType(true)">
       <button @click="vType(false)" class="px-4 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600">输入</button>
@@ -430,28 +443,61 @@ createApp({
       viewerShow.value = false;
     }
     function vScale(e) {
-      const r = e.target.getBoundingClientRect();
-      const nw = e.target.naturalWidth || r.width;
-      const nh = e.target.naturalHeight || r.height;
-      return { x: (e.clientX - r.left) * nw / r.width, y: (e.clientY - r.top) * nh / r.height };
+      const el = e.target;
+      const r = el.getBoundingClientRect();
+      const nw = el.naturalWidth || r.width;
+      const nh = el.naturalHeight || r.height;
+      // object-contain 缩放：算出实际内容区（去掉上下/左右黑边），坐标才准
+      const s = Math.min(r.width / nw, r.height / nh);
+      const cw = nw * s, ch = nh * s;
+      const offX = (r.width - cw) / 2, offY = (r.height - ch) / 2;
+      let x = (e.clientX - r.left - offX) * nw / cw;
+      let y = (e.clientY - r.top - offY) * nh / ch;
+      x = Math.max(0, Math.min(nw, x));
+      y = Math.max(0, Math.min(nh, y));
+      return { x, y };
     }
     function vSend(o) {
       if (viz.ws && viz.ws.readyState === 1) viz.ws.send(JSON.stringify(o));
     }
     function vMouse(kind, e) {
       const p = vScale(e);
+      viz.lastX = p.x; viz.lastY = p.y;
       if (kind === 'down') {
-        viz.lastX = p.x; viz.lastY = p.y;
         vSend({ type: 'click', x: p.x, y: p.y });
       } else if (kind === 'move') {
-        if (Math.abs(p.x - viz.lastX) + Math.abs(p.y - viz.lastY) < 1) return;
-        viz.lastX = p.x; viz.lastY = p.y;
         vSend({ type: 'move', x: p.x, y: p.y });
       }
     }
+    function vTouchStart(e) {
+      const t = e.touches[0];
+      const p = vScale({ target: e.target, clientX: t.clientX, clientY: t.clientY });
+      viz.lastX = p.x; viz.lastY = p.y;
+      viz.touchMoved = false;
+    }
+    function vTouchMove(e) {
+      const t = e.touches[0];
+      const p = vScale({ target: e.target, clientX: t.clientX, clientY: t.clientY });
+      if (Math.abs(p.x - viz.lastX) + Math.abs(p.y - viz.lastY) < 4) return;
+      viz.lastX = p.x; viz.lastY = p.y;
+      viz.touchMoved = true;
+      vSend({ type: 'move', x: p.x, y: p.y });
+    }
+    function vTouchEnd(e) {
+      if (viz.touchMoved) return; // 拖动了就不算点击
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const p = vScale({ target: e.target, clientX: t.clientX, clientY: t.clientY });
+      viz.lastX = p.x; viz.lastY = p.y;
+      vSend({ type: 'click', x: p.x, y: p.y });
+    }
     function vScroll(e) {
       const p = vScale(e);
+      viz.lastX = p.x; viz.lastY = p.y;
       vSend({ type: 'scroll', x: p.x, y: p.y, delta_y: Math.round(e.deltaY) });
+    }
+    function vScrollBy(dx, dy) {
+      vSend({ type: 'scroll', x: viz.lastX || 400, y: viz.lastY || 300, delta_x: dx, delta_y: dy });
     }
     function vType(enter) {
       if (!vText.value) return;
@@ -469,7 +515,8 @@ createApp({
     return { authed, password, busy, err, platforms, logs, toasts, linkOk, busyName,
              todayTotal, statusColor, doLogin, doLogout, openLogin, checkLogin,
              viewerShow, viewerName, viewerImg, viewerErr,
-             openViewer, closeViewer, vMouse, vScroll, vType, vText,
+             openViewer, closeViewer, vMouse, vScroll, vScrollBy,
+             vTouchStart, vTouchMove, vTouchEnd, vType, vText,
              tab, settings, saving, loadSettings, saveSettings };
   }
 }).mount('#app');

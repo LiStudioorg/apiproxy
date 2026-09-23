@@ -215,8 +215,24 @@ func (p *Pool) CloseView(name string) {
 	_ = pg.Close()
 }
 
+// CachedLogged 返回缓存的登录态（可能为 nil=未知）。只会返回上一次真实检测/关闭画面的结果，
+// 不访问浏览器，供管理界面高频轮询状态使用。
+func (inst *Instance) CachedLogged() *bool {
+	if inst == nil {
+		return nil
+	}
+	inst.pool.mu.Lock()
+	defer inst.pool.mu.Unlock()
+	if inst.logged == nil {
+		return nil
+	}
+	v := *inst.logged
+	return &v
+}
+
 // LoginStatus 检查登录态：优先用已打开的画面 Tab 实时检测；
 // 没有画面 Tab 时开一个临时 Tab 检测一次并缓存（用完即关，省内存）。
+// 导航/加载带超时，网络异常时不会无限阻塞调用方。
 func (inst *Instance) LoginStatus() (bool, error) {
 	if inst == nil {
 		return false, errors.New("实例不存在")
@@ -228,7 +244,8 @@ func (inst *Instance) LoginStatus() (bool, error) {
 	p.mu.Unlock()
 
 	if pg != nil {
-		ok, err := inst.driver.LoginCheck(pg)
+		tp := pg.Timeout(15 * time.Second)
+		ok, err := inst.driver.LoginCheck(tp)
 		if err == nil {
 			p.mu.Lock()
 			inst.logged = &ok
@@ -244,12 +261,13 @@ func (inst *Instance) LoginStatus() (bool, error) {
 	if stopHard, err := blockHeavyResources(tmp); err == nil {
 		defer stopHard()
 	}
-	if err := tmp.Navigate(inst.driver.LoginURL()); err != nil {
+	tp := tmp.Timeout(20 * time.Second)
+	if err := tp.Navigate(inst.driver.LoginURL()); err != nil {
 		return false, err
 	}
-	tmp.MustWaitLoad()
+	tp.MustWaitLoad()
 	time.Sleep(600 * time.Millisecond)
-	ok, err := inst.driver.LoginCheck(tmp)
+	ok, err := inst.driver.LoginCheck(tp)
 	if err == nil {
 		p.mu.Lock()
 		inst.logged = &ok
@@ -485,10 +503,11 @@ func runChat(ctx context.Context, d platform.PlatformDriver, p *rod.Page, text s
 	if stopHard, err := blockHeavyResources(p); err == nil {
 		defer stopHard()
 	}
-	if err := p.Navigate(d.LoginURL()); err != nil {
+	tp := p.Timeout(20 * time.Second)
+	if err := tp.Navigate(d.LoginURL()); err != nil {
 		return fmt.Errorf("检查登录状态: %w", err)
 	}
-	p.MustWaitLoad()
+	tp.MustWaitLoad()
 	time.Sleep(800 * time.Millisecond)
 	loggedIn, err := d.LoginCheck(p)
 	if err != nil {

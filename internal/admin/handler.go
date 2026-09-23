@@ -182,11 +182,9 @@ func (h *Handler) snapshot() []PlatformStatus {
 		pc, ok := h.cfg.GetPlatform(d.Name())
 		ps := PlatformStatus{Name: d.Name(), Enabled: ok && pc.Enabled}
 		if inst, err := h.pool.Peek(d); err == nil && inst != nil {
+			// 高频轮询只读缓存，不访问浏览器；真实检测走 /api/platform/checklogin
 			ps.Running = true
-			loggedIn, lerr := inst.LoginStatus()
-			if lerr == nil {
-				ps.LoggedIn = &loggedIn
-			}
+			ps.LoggedIn = inst.CachedLogged()
 		}
 		if ok {
 			ps.TodayRequests = h.stats.Snapshot()[d.Name()]

@@ -88,6 +88,7 @@ func (v *browserViewer) serve() {
 			X      float64 `json:"x"`
 			Y      float64 `json:"y"`
 			DeltaY int     `json:"delta_y"`
+			DeltaX int     `json:"delta_x"`
 			Text   string  `json:"text"`
 			Key    string  `json:"key"`
 		}
@@ -119,6 +120,7 @@ func (v *browserViewer) dispatch(ev struct {
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	DeltaY int     `json:"delta_y"`
+	DeltaX int     `json:"delta_x"`
 	Text   string  `json:"text"`
 	Key    string  `json:"key"`
 }) {
@@ -131,7 +133,7 @@ func (v *browserViewer) dispatch(ev struct {
 		_ = proto.InputDispatchMouseEvent{Type: proto.InputDispatchMouseEventTypeMousePressed, X: ev.X, Y: ev.Y, Button: proto.InputMouseButtonLeft, ClickCount: 1}.Call(v.page)
 		_ = proto.InputDispatchMouseEvent{Type: proto.InputDispatchMouseEventTypeMouseReleased, X: ev.X, Y: ev.Y, Button: proto.InputMouseButtonLeft, ClickCount: 1}.Call(v.page)
 	case "scroll":
-		_ = proto.InputDispatchMouseEvent{Type: proto.InputDispatchMouseEventTypeMouseWheel, X: ev.X, Y: ev.Y, DeltaY: float64(ev.DeltaY)}.Call(v.page)
+		_ = proto.InputDispatchMouseEvent{Type: proto.InputDispatchMouseEventTypeMouseWheel, X: ev.X, Y: ev.Y, DeltaY: float64(ev.DeltaY), DeltaX: float64(ev.DeltaX)}.Call(v.page)
 	case "type":
 		_ = proto.InputInsertText{Text: ev.Text}.Call(v.page)
 	case "enter":
