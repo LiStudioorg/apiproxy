@@ -86,6 +86,21 @@
             <button @click="checkLogin(p)"
                     class="px-3 text-sm py-2 rounded-lg border border-slate-700 hover:bg-slate-800">立即检测</button>
           </div>
+          <div class="pt-1 border-t border-slate-800/80">
+            <button @click="expandImport[p.name]=!expandImport[p.name]"
+                    class="text-xs text-slate-400 hover:text-sky-300 text-left">
+              {{ expandImport[p.name] ? '收起导入' : '从电脑导入登录态（cURL / Cookie）↓' }}
+            </button>
+            <div v-if="expandImport[p.name]" class="mt-2 flex flex-col gap-2">
+              <textarea v-model="importTexts[p.name]" rows="3" spellcheck="false"
+                        placeholder="电脑浏览器登录该平台后：F12 → Network → 请求 → 右键复制为 cURL，整段粘到这里（含每家不同的 Cookie 与请求头，如 X-CSRF/Referer）"
+                        class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono focus:border-sky-500 focus:outline-none text-slate-100 resize-y"></textarea>
+              <button @click="importSession(p.name)" :disabled="importing[p.name]"
+                      class="text-sm py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-800 disabled:opacity-50">
+                {{ importing[p.name] ? '注入并验证中…' : '注入浏览器并验证登录' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -239,7 +254,9 @@ createApp({
     const logs = ref([]);
     const toasts = ref([]);
     const linkOk = ref(false);
-    const busyName = ref('');
+    const expandImport = ref({});
+    const importTexts = ref({});
+    const importing = ref({});
     const viewerShow = ref(false);
     const viewerName = ref('');
     const viewerImg = ref(null);
@@ -379,18 +396,24 @@ createApp({
       }).catch(() => {});
     }
 
-    // ---- 平台登录 ----
-    async function openLogin(p) {
-      busyName.value = p.name;
-      const r = await api(`/api/platform/login/${p.name}`, { method: 'POST' });
-      busyName.value = '';
+    // ---- 平台登录态 ----
+    // 用户从电脑浏览器复制 cURL 导入：每家平台需要的 Cookie/请求头不一样，全部注入无头浏览器并回放验证
+    async function importSession(name) {
+      const text = (importTexts.value[name] || '').trim();
+      if (!text) { toast('请先粘贴 cURL 内容', 'err'); return; }
+      importing.value = { ...importing.value, [name]: true };
+      const r = await api(`/api/platform/import/${name}`, {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      });
+      importing.value = { ...importing.value, [name]: false };
       if (r.status === 200) {
-        toast(`浏览器已拉起，用「浏览器画面」操作完成登录（${p.name}）`, 'ok');
-        log(`[${p.name}] 已拉起浏览器 → ${r.data.url}`);
-        startPollLogin(p.name);
+        toast(`${name} 登录态导入成功，已注入浏览器并验证通过`, 'ok');
+        log(`[${name}] 导入 cURL 会话成功`);
+        fetchStatus();
       } else {
-        toast(`打开登录页失败: ${r.data.error || ''}`, 'err');
-        log(`[${p.name}] 打开失败: ${r.data.error}`);
+        toast(`导入失败: ${r.data.error || ''}`, 'err');
+        log(`[${name}] 导入失败: ${r.data.error}`);
       }
     }
     async function checkLogin(p) {
@@ -512,8 +535,9 @@ createApp({
     });
     onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); if (ws) ws.close(); });
 
-    return { authed, password, busy, err, platforms, logs, toasts, linkOk, busyName,
-             todayTotal, statusColor, doLogin, doLogout, openLogin, checkLogin,
+    return { authed, password, busy, err, platforms, logs, toasts, linkOk,
+             todayTotal, statusColor, doLogin, doLogout, checkLogin,
+             expandImport, importTexts, importing, importSession,
              viewerShow, viewerName, viewerImg, viewerErr,
              openViewer, closeViewer, vMouse, vScroll, vScrollBy,
              vTouchStart, vTouchMove, vTouchEnd, vType, vText,

@@ -113,7 +113,7 @@ func (h *Handler) Routes(mux *http.ServeMux) {
 	mux.Handle("/api/settings", h.requireAuth(h.handleSettings))
 	mux.HandleFunc("/api/ws/status", h.wsStatus)
 	mux.HandleFunc("/api/viewer/ws", h.handleViewerWS)
-	mux.HandleFunc("/api/platform/login/", h.requireAuth(h.handlePlatformLogin))
+	mux.HandleFunc("/api/platform/import/", h.requireAuth(h.handleImportSession))
 	mux.HandleFunc("/api/platform/checklogin/", h.requireAuth(h.handleCheckLogin))
 }
 
@@ -238,28 +238,50 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// 触发一次即视为打开过登录页——用于后续登录成功后的消息去重。
-func (h *Handler) handlePlatformLogin(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimPrefix(r.URL.Path, "/api/platform/login/")
+// handleImportSession 导入外部登录态：用户在电脑浏览器登录平台后，DevTools 复制为 cURL 整段粘进来。
+// Cookie 与必要的请求头注入常驻无头浏览器（不写盘、不打日志），再用平台首页加载验证登录是否成立。
+func (h *Handler) handleImportSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrCode(w, http.StatusMethodNotAllowed, "")
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/api/platform/import/")
 	d, ok := platform.Get(name)
 	if !ok {
 		writeErrCode(w, http.StatusBadRequest, "未知平台: "+name)
 		return
 	}
-	go h.hub.PushStatus(h.snapshot())
-	h.loginOnce.Store(name, true)
-	inst, err := h.pool.OpenLogin(d)
+	var body struct {
+		Text string `json:"text"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	inst, err := h.pool.Ensure(d)
 	if err != nil {
-		h.loginOnce.Delete(name)
 		writeErrCode(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	loggedIn, _ := inst.LoginStatus()
+	type importResult struct {
+		err error
+	}
+	res := make(chan importResult, 1)
+	go func() {
+		res <- importResult{err: inst.ImportSession(body.Text)}
+	}()
+	select {
+	case r := <-res:
+		if r.err != nil {
+			writeErrCode(w, http.StatusBadRequest, r.err.Error())
+			return
+		}
+	case <-time.After(60 * time.Second):
+		writeErrCode(w, http.StatusGatewayTimeout, "导入验证超时（60s），请重试；若站点较慢可稍后再试")
+		return
+	}
 	go h.hub.PushStatus(h.snapshot())
 	writeJSON(w, map[string]interface{}{
 		"ok":        true,
+		"logged_in": true,
 		"url":       d.LoginURL(),
-		"logged_in": loggedIn,
 	})
 }
 

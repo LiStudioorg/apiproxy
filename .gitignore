@@ -5,6 +5,7 @@
 # 浏览器用户数据（含 Cookie，切勿提交）
 /profiles/
 /profiles-test/
+/profiles_t/
 
 # 本地配置变体
 /config.local.toml

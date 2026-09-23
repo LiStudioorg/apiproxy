@@ -103,11 +103,12 @@ func (p *Pool) Rotate(d platform.PlatformDriver) (account.Entry, error) {
 // Instance = 一个平台的会话句柄（不再对应独立浏览器）。
 // page 是该平台的“登录画面”Tab，仅浏览器画面打开期间存在，可为 nil。
 type Instance struct {
-	name   string
-	driver platform.PlatformDriver
-	pool   *Pool
-	page   *rod.Page
-	logged *bool // 已知登录态缓存（无画面 Tab 时避免反复开临时 Tab）
+	name         string
+	driver       platform.PlatformDriver
+	pool         *Pool
+	page         *rod.Page
+	logged       *bool                // 已知登录态缓存（无画面 Tab 时避免反复开临时 Tab）
+	extraHeaders proto.NetworkHeaders // 通过「导入登录态」带入的外部请求头（browser 自带头除外）
 }
 
 // Peek 返回平台会话句柄；浏览器未启动或平台未注册时返回 nil。
@@ -149,11 +150,6 @@ func (p *Pool) Running() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.browser != nil
-}
-
-// OpenLogin 打开该平台的登录画面 Tab 并导航到登录页（旧入口，兼容保留）。
-func (p *Pool) OpenLogin(d platform.PlatformDriver) (*Instance, error) {
-	return p.openView(d)
 }
 
 // OpenViewer 供「浏览器画面」使用：确保浏览器与该平台画面 Tab 就绪，
@@ -290,11 +286,12 @@ func (inst *Instance) Chat(ctx context.Context, text string, emit func(string)) 
 	if err != nil {
 		return err
 	}
+	extra := inst.extraHeadersSnapshot()
 	pg := stealth.MustPage(b)
 	defer func() { _ = pg.Close() }()
 	incActiveChat()
 	defer decActiveChat()
-	return runChat(ctx, inst.driver, pg, text, emit)
+	return runChat(ctx, inst.driver, pg, text, emit, extra)
 }
 
 // ensureBrowser 懒加载拉起唯一浏览器进程（省内存参数已调优），并发调用只启动一次。
@@ -494,11 +491,13 @@ func ensureProfileDir(dir string) error {
 }
 
 // runChat 在独立 Tab 上执行一轮对话：导航 → 登录态检查 → 新对话 → 发消息 → 抓 SSE 流式回包。
-func runChat(ctx context.Context, d platform.PlatformDriver, p *rod.Page, text string, emit func(string)) error {
+func runChat(ctx context.Context, d platform.PlatformDriver, p *rod.Page, text string, emit func(string), extra proto.NetworkHeaders) error {
 	// 聊天 Tab 需打开 Network 域才能收到 dataReceived
 	if restore := p.EnableDomain(&proto.NetworkEnable{}); restore != nil {
 		defer restore()
 	}
+	// 导入登录态时带回的外部请求头（如 X-CSRF / Referer），随聊天请求一并发出
+	applyHeaders(p, extra)
 	// 拦截图片/字体/媒体：聊天界面并不需要，能显著降低软渲染下的内存与 CPU
 	if stopHard, err := blockHeavyResources(p); err == nil {
 		defer stopHard()
