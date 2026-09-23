@@ -12,6 +12,10 @@ tls_key = ""
 # 请求队列：缓冲上限（满则返回 HTTP 429）+ 并发 worker 数（同时处理的请求数，建议 ≥ 各平台 max_concurrency 之和）
 queue_capacity = 64
 queue_workers = 6
+# 全局浏览器 profile 目录：全平台共用一个无头浏览器，各平台 Cookie 按域名天然隔离；登录会话保存在这里
+profile_dir = "./profiles"
+# 全局浏览器代理（形如 http://127.0.0.1:7890，留空直连），变更后在空闲时自动重建浏览器
+proxy = ""
 
 # ---- 认证 ----
 [auth]

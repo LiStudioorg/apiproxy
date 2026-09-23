@@ -27,6 +27,9 @@ type ServerConfig struct {
 	TLSKey        string `toml:"tls_key"`
 	QueueCapacity int    `toml:"queue_capacity"`
 	QueueWorkers  int    `toml:"queue_workers"`
+	// 单浏览器模式下的全局 profile 目录与代理（各平台 Cookie 按域名隔离，共用一个浏览器）。
+	ProfileDir string `toml:"profile_dir"`
+	Proxy      string `toml:"proxy"`
 }
 
 func (s ServerConfig) UseTLS() bool {
@@ -122,6 +125,9 @@ func (c *Config) applyDefaults() {
 	if c.Server.QueueWorkers <= 0 {
 		c.Server.QueueWorkers = 1
 	}
+	if c.Server.ProfileDir == "" {
+		c.Server.ProfileDir = "./profiles"
+	}
 	if c.Auth.SessionTTL <= 0 {
 		c.Auth.SessionTTL = 24 * time.Hour
 	}
@@ -178,6 +184,8 @@ type AppSettings struct {
 		TLS           bool   `json:"tls"`
 		QueueCapacity int    `json:"queue_capacity"`
 		QueueWorkers  int    `json:"queue_workers"`
+		Proxy         string `json:"proxy"`
+		ProfileDir    string `json:"profile_dir"`
 	} `json:"server"`
 	Auth struct {
 		Enabled     bool     `json:"enabled"`
@@ -196,6 +204,8 @@ func (c *Config) SettingsSnapshot() AppSettings {
 	s.Server.TLS = c.Server.UseTLS()
 	s.Server.QueueCapacity = c.Server.QueueCapacity
 	s.Server.QueueWorkers = c.Server.QueueWorkers
+	s.Server.Proxy = c.Server.Proxy
+	s.Server.ProfileDir = c.Server.ProfileDir
 	s.Auth.Enabled = c.Auth.Enabled
 	s.Auth.HasPassword = c.Auth.Password != ""
 	s.Auth.APIKeys = append([]string(nil), c.Auth.APIKeys...)
@@ -241,6 +251,7 @@ func (c *Config) UpdateSettings(server *ServerEdit, platforms map[string]Platfor
 	if server != nil {
 		next.Server.QueueCapacity = server.QueueCapacity
 		next.Server.QueueWorkers = server.QueueWorkers
+		next.Server.Proxy = server.Proxy
 	}
 	for name, p := range platforms {
 		cur, ok := next.Platforms[name]
@@ -272,10 +283,10 @@ func (c *Config) UpdateSettings(server *ServerEdit, platforms map[string]Platfor
 	return nil
 }
 
-// ServerEdit 网页端可编辑的 [server] 字段（仅队列相关；监听/TLS 需改文件或重启）。
 type ServerEdit struct {
-	QueueCapacity int `json:"queue_capacity"`
-	QueueWorkers  int `json:"queue_workers"`
+	QueueCapacity int    `json:"queue_capacity"`
+	QueueWorkers  int    `json:"queue_workers"`
+	Proxy         string `json:"proxy"`
 }
 
 func writeFileAtomic(path string, data []byte) error {

@@ -76,19 +76,16 @@
         </div>
         <p class="text-slate-500 text-xs mt-3">今日请求: <b class="text-slate-300">{{ p.today_requests }}</b></p>
         <div class="mt-4 flex flex-col gap-2">
-          <div class="flex gap-2">
-            <button @click="openLogin(p)"
-                    :disabled="busyName===p.name"
-                    class="flex-1 text-sm py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700">
-              {{ busyName===p.name ? '正在拉起…' : '打开登录页' }}
-            </button>
-            <button @click="checkLogin(p)"
-                    class="px-3 text-sm py-2 rounded-lg border border-slate-700 hover:bg-slate-800">检测</button>
-          </div>
           <button @click="openViewer(p)"
                   class="text-sm py-2 rounded-lg bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 border border-sky-800">
-            浏览器画面（无桌面登录）
+            浏览器画面（登录 / 使用）
           </button>
+          <div class="flex gap-2">
+            <button @click="startPollLogin(p.name)"
+                    class="flex-1 text-sm py-2 rounded-lg border border-slate-700 hover:bg-slate-800">轮询登录状态</button>
+            <button @click="checkLogin(p)"
+                    class="px-3 text-sm py-2 rounded-lg border border-slate-700 hover:bg-slate-800">立即检测</button>
+          </div>
         </div>
       </div>
     </div>
@@ -128,13 +125,22 @@
                    class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none text-slate-100">
           </div>
           <div class="flex flex-col gap-1 text-slate-400">
+            <label>浏览器代理（全局，形如 http://127.0.0.1:7890，留空直连）</label>
+            <input v-model="settings.server.proxy" type="text" placeholder="http://…"
+                   class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none text-slate-100">
+          </div>
+          <div class="flex flex-col gap-1 text-slate-400">
             <label>监听地址 / TLS</label>
             <p class="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-800 text-slate-300">
               {{ settings.server.host }}:{{ settings.server.port }} · {{ settings.server.tls ? 'HTTPS' : 'HTTP' }}
             </p>
           </div>
+          <div class="flex flex-col gap-1 text-slate-400 md:col-span-2">
+            <label>浏览器 profile 目录（登录会话保存处，只读）</label>
+            <p class="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-800 text-slate-300">{{ settings.server.profile_dir }}</p>
+          </div>
         </div>
-        <p class="text-xs text-slate-500 mt-3">队列容量与 worker 数改动在<b class="text-slate-400">下次重启</b>后生效；监听地址 / TLS 请在 config.toml 修改。平台的并发数 / 代理等<b class="text-emerald-400">即时生效</b>。</p>
+        <p class="text-xs text-slate-500 mt-3">队列容量与 worker 数改动在<b class="text-slate-400">下次重启</b>后生效；代理变更即时重建浏览器（空闲时）；监听地址 / TLS 请在 config.toml 修改。平台的并发 / 间隔 / 限额<b class="text-emerald-400">即时生效</b>。</p>
       </div>
 
       <!-- 各平台 -->
@@ -163,15 +169,6 @@
             <input v-model.number="s.request_limit" type="number" min="0"
                    class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none text-slate-100">
           </div>
-          <div class="flex flex-col gap-1 text-slate-400 md:col-span-2">
-            <label>代理（形如 http://127.0.0.1:7890，留空直连）</label>
-            <input v-model="s.proxy" type="text" placeholder="http://…"
-                   class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none text-slate-100">
-          </div>
-          <div class="flex flex-col gap-1 text-slate-400 md:col-span-2">
-            <label>浏览器 profile 目录（登录会话保存处，只读）</label>
-            <p class="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-800 text-slate-300">{{ s.profile_dir }}</p>
-          </div>
         </div>
       </div>
     </div>
@@ -181,7 +178,7 @@
   <div v-if="viewerShow" class="fixed inset-0 z-40 bg-black/90 flex flex-col items-center p-3">
     <div class="flex w-full max-w-4xl items-center gap-3 mb-2">
       <span class="font-medium capitalize">{{ viewerName }} 浏览器画面</span>
-      <span class="flex-1 text-xs text-slate-500">截图约 0.4s 刷新 · 点击 / 拖拽 / 滚轮即可操作 · 不支持输入时请在页面输入框里点一下再敲键盘</span>
+      <span class="flex-1 text-xs text-slate-500">先在页面里点一下输入框聚焦，再在下方输入文字 · 点击 / 拖拽 / 滚轮操作页面</span>
       <button @click="closeViewer" class="px-3 py-1 text-sm rounded-lg border border-slate-700 hover:bg-slate-800">关闭</button>
     </div>
     <div class="flex-1 w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-lg overflow-hidden relative">
@@ -196,6 +193,13 @@
       <div v-else class="h-full flex items-center justify-center text-slate-500 text-sm">
         {{ viewerErr || '连接中…' }}
       </div>
+    </div>
+    <div class="w-full max-w-4xl flex gap-2 items-center mt-2">
+      <input v-model="vText" type="text" placeholder="输入文字（先点页面里的输入框让它聚焦）"
+             class="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm focus:border-sky-500 focus:outline-none"
+             @keydown.enter.prevent="vType(true)">
+      <button @click="vType(false)" class="px-4 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600">输入</button>
+      <button @click="vType(true)" class="px-4 py-2 text-sm rounded-lg bg-sky-600 hover:bg-sky-500">回车</button>
     </div>
   </div>
 
@@ -227,8 +231,9 @@ createApp({
     const viewerName = ref('');
     const viewerImg = ref(null);
     const viewerErr = ref('');
+    const vText = ref('');
     const tab = ref('status');
-    const settings = ref({ server: { host: '', port: 8080, tls: false, queue_capacity: 0, queue_workers: 0 }, platforms: {} });
+    const settings = ref({ server: { host: '', port: 8080, tls: false, queue_capacity: 0, queue_workers: 0, proxy: '', profile_dir: '' }, platforms: {} });
     const saving = ref(false);
     let ws = null;
     let pollTimer = null;
@@ -325,6 +330,7 @@ createApp({
           server: {
             queue_capacity: settings.value.server.queue_capacity || 0,
             queue_workers: settings.value.server.queue_workers || 0,
+            proxy: settings.value.server.proxy || '',
           },
           platforms: settings.value.platforms || {},
         }),
@@ -447,6 +453,12 @@ createApp({
       const p = vScale(e);
       vSend({ type: 'scroll', x: p.x, y: p.y, delta_y: Math.round(e.deltaY) });
     }
+    function vType(enter) {
+      if (!vText.value) return;
+      vSend({ type: 'type', text: vText.value });
+      if (enter) vSend({ type: 'enter' });
+      vText.value = '';
+    }
 
     onMounted(async () => {
       await whoami();
@@ -457,7 +469,7 @@ createApp({
     return { authed, password, busy, err, platforms, logs, toasts, linkOk, busyName,
              todayTotal, statusColor, doLogin, doLogout, openLogin, checkLogin,
              viewerShow, viewerName, viewerImg, viewerErr,
-             openViewer, closeViewer, vMouse, vScroll,
+             openViewer, closeViewer, vMouse, vScroll, vType, vText,
              tab, settings, saving, loadSettings, saveSettings };
   }
 }).mount('#app');

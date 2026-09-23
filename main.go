@@ -86,6 +86,8 @@ func main() {
 		pool.ApplyConfig()
 		app.Reload()
 	}
+	// 浏览器常驻：启动即拉起所有启用平台的无头浏览器，请求直接复用。
+	go pool.Prestart()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -32,11 +32,13 @@ func (h *Handler) handleViewerWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	inst, err := h.pool.OpenLogin(d)
+	inst, err := h.pool.OpenViewer(d)
 	if err != nil {
 		_ = conn.WriteJSON(map[string]interface{}{"type": "error", "msg": err.Error()})
 		return
 	}
+	// 画面结束后关闭该平台的登录画面 Tab，释放渲染进程
+	defer h.pool.CloseView(name)
 	go h.hub.PushStatus(h.snapshot())
 
 	viewer := &browserViewer{conn: conn, page: inst.Page()}
@@ -54,7 +56,7 @@ func (v *browserViewer) serve() {
 	done := make(chan struct{})
 
 	go func() {
-		t := time.NewTicker(350 * time.Millisecond)
+		t := time.NewTicker(450 * time.Millisecond)
 		defer t.Stop()
 		for {
 			select {
@@ -97,7 +99,7 @@ func (v *browserViewer) serve() {
 }
 
 func (v *browserViewer) capture() ([]byte, error) {
-	q := 70
+	q := 55
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	res, err := proto.PageCaptureScreenshot{

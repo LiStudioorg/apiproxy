@@ -101,25 +101,36 @@ type PlatformDriver interface {
 
 新增平台 = 新增一个实现该接口的文件 + 在平台配置表注册。
 
-### 5.2 浏览器实例池
+### 5.2 浏览器实例池（单浏览器 + 按需 Tab）
 
-每平台对应独立 Browser 实例，独立 User Data Dir 隔离 Cookie 与会话：
+**全平台共用一个常驻无头浏览器进程**（省内存的关键，不要每平台各开一个进程）：
 
 ```go
-type PlatformBrowser struct {
-    Name    string
-    Browser *rod.Browser
-    Page    *rod.Page
-    Profile string
-    Driver  PlatformDriver
+type Pool struct {
+    browser *rod.Browser            // 全平台唯一浏览器
+    instances map[string]*Instance  // 每平台 = 一个会话句柄（不是进程）
+}
+
+type Instance struct {
+    name   string
+    driver platform.PlatformDriver
+    page   *rod.Page   // 登录画面 Tab，仅「浏览器画面」打开期间存在
+    logged *bool       // 登录态缓存
 }
 ```
 
 关键点：
-- `launcher.New().UserDataDir(cfg.ProfileDir)` 独立 Profile
-- `Headless(true)` 始终无头；登录/操作一律通过管理界面「浏览器画面」（CDP 截图 + 输入事件回灌）
-- `stealth.MustPage(browser)` 必须用 stealth，不能用 `browser.MustPage()`
-- 每实例可绑定独立代理：`launcher.New().Proxy("http://ip:port")`
+- 唯一浏览器按需懒启动，`stealth.MustPage(browser)` 开每任务独立 **Tab**，用完即 `page.Close()`（释放渲染进程），不长久持有页面。
+- Cookie 按域名在单 profile 里天然隔离：`launcher.New().UserDataDir(srv.ProfileDir)`。
+- 登录入口唯一：管理界面「浏览器画面」(`Pool.OpenViewer` / `CloseView`)；无桌面环境全靠 CDP 截图+事件回灌。
+- `Headless(true)` + `Set("--headless","new")`：new 模式才兼容 Termux 无 X 环境。
+- 省内存参数（Termux chromium 实测，不许乱改）：
+  - `--no-zygote` **必须开**：不开会拉起 5 个 zygote（每个最大 ~190MB）。
+  - `--renderer-process-limit=1`：关 Tab 后最多保留 1 个渲染进程。
+  - `--disable-gpu --disable-extensions --disable-sync --disable-background-networking --mute-audio --disable-dev-shm-usage --window-size=800,600`。
+- 聊天 Tab 拦截 Image/Font/Media 请求（`Fetch` 域 `BlockedByClient`），登录检查临时 Tab 同样拦截。
+- 内存阈值守护：单个浏览器 RSS 超 `maxBrowserRSS`(1.5G) 且无进行中对话 → 自动重启回收（`browserRSS` 扫 `/proc`）。
+- headless=new 单浏览器 Termux 实测空闲 ~400-750MB（多浏览器会是 N 倍）。
 
 ### 5.3 SSE 流式响应捕获（最关键技术点）
 
@@ -163,9 +174,9 @@ for raw := range topic {
 - 请求间隔加 2~5 秒随机延迟。
 
 ### 6.3 资源隔离
-- 每平台独立 Browser + 独立 User Data Dir。
-- 多账号每账号一个 Profile，BrowserPool 轮询分配。
-- 每实例绑定独立代理。
+- 全平台共用唯一无头浏览器 + 全局 profile（Cookie 按域名天然隔离，一处登录全局复用）。
+- 每平台会话句柄互相独立（登录画面 Tab / 登录态缓存），互不干扰。
+- 浏览器代理全局统一（`[server] proxy`）；如需换网络环境，改配置后浏览器空闲时自动重建。
 
 ### 6.4 频率控制
 - 每平台最大并发 1，请求间隔 ≥ 2 秒。
