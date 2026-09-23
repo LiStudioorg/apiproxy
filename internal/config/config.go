@@ -55,7 +55,6 @@ type PlatformConfig struct {
 	ProfileDir    string          `toml:"profile_dir"`
 	Accounts      []AccountConfig `toml:"accounts"`
 	Proxy         string          `toml:"proxy"`
-	Headless      bool            `toml:"headless"`
 	MaxConcurrent int             `toml:"max_concurrency"`
 	MinInterval   time.Duration   `toml:"min_interval"`
 	RequestLimit  int64           `toml:"request_limit"`
@@ -155,7 +154,6 @@ func (c *Config) GetPlatform(name string) (PlatformConfig, bool) {
 func (p PlatformConfig) PlatformSettings() PlatformSettings {
 	return PlatformSettings{
 		Enabled:       p.Enabled,
-		Headless:      p.Headless,
 		Proxy:         p.Proxy,
 		MaxConcurrent: p.MaxConcurrent,
 		MinIntervalS:  p.MinInterval.Seconds(),
@@ -165,7 +163,6 @@ func (p PlatformConfig) PlatformSettings() PlatformSettings {
 
 type PlatformSettings struct {
 	Enabled       bool    `json:"enabled"`
-	Headless      bool    `json:"headless"`
 	Proxy         string  `json:"proxy"`
 	MaxConcurrent int     `json:"max_concurrency"`
 	MinIntervalS  float64 `json:"min_interval_s"`
@@ -251,7 +248,6 @@ func (c *Config) UpdateSettings(server *ServerEdit, platforms map[string]Platfor
 			continue // 未知平台不新增
 		}
 		cur.Enabled = p.Enabled
-		cur.Headless = p.Headless
 		cur.Proxy = p.Proxy
 		cur.MaxConcurrent = p.MaxConcurrent
 		cur.MinInterval = time.Duration(p.MinIntervalS * float64(time.Second))

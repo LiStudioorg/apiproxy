@@ -117,7 +117,7 @@ type PlatformBrowser struct {
 
 关键点：
 - `launcher.New().UserDataDir(cfg.ProfileDir)` 独立 Profile
-- `Headless(false)` 有头模式，便于手动登录
+- `Headless(true)` 始终无头；登录/操作一律通过管理界面「浏览器画面」（CDP 截图 + 输入事件回灌）
 - `stealth.MustPage(browser)` 必须用 stealth，不能用 `browser.MustPage()`
 - 每实例可绑定独立代理：`launcher.New().Proxy("http://ip:port")`
 

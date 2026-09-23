@@ -119,8 +119,7 @@ api_keys = []          # /v1 Bearer 密钥，留空则不鉴权
 enabled = true
 profile_dir = "./profiles/deepseek"
 proxy = ""             # 可选，如 http://127.0.0.1:7890
-headless = true        # 无桌面环境（服务器/终端）填 true，用管理界面「浏览器画面」登录
-max_concurrency = 1
+max_concurrency = 1    # 并发流式对话数（每并发开一个 Tab）
 min_interval = "2s"
 request_limit = 150    # 达阈值自动切换备用账号（可配 accounts 多账号）
 ```

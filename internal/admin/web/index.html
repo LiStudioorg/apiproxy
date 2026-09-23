@@ -168,14 +168,6 @@
             <input v-model="s.proxy" type="text" placeholder="http://…"
                    class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none text-slate-100">
           </div>
-          <div class="flex flex-col gap-1 text-slate-400">
-            <label>无头模式（无桌面登录用浏览器画面）</label>
-            <button @click="s.headless = !s.headless"
-                    class="text-left px-3 py-2 rounded-lg border text-slate-100"
-                    :class="s.headless ? 'bg-emerald-600/20 border-emerald-700 text-emerald-300' : 'bg-slate-800 border-slate-700'">
-              {{ s.headless ? '已开启 · 自动无头' : '已关闭 · 有桌面则弹窗' }}
-            </button>
-          </div>
           <div class="flex flex-col gap-1 text-slate-400 md:col-span-2">
             <label>浏览器 profile 目录（登录会话保存处，只读）</label>
             <p class="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-800 text-slate-300">{{ s.profile_dir }}</p>

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -105,7 +104,6 @@ type Instance struct {
 	driver   platform.PlatformDriver
 	profile  string
 	proxy    string
-	headless bool
 
 	browser *rod.Browser
 	page    *rod.Page // 控制页：登录画面 / viewer / LoginStatus，不参与聊天
@@ -140,9 +138,8 @@ func (p *Pool) Ensure(d platform.PlatformDriver) (*Instance, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	wantHeadless := effectiveHeadless(cfg.Headless)
 	if inst, ok := p.instances[d.Name()]; ok {
-		if inst.profile != entry.ProfileDir || inst.proxy != entry.Proxy || inst.headless != wantHeadless {
+		if inst.profile != entry.ProfileDir || inst.proxy != entry.Proxy {
 			inst.close()
 			delete(p.instances, d.Name())
 		} else {
@@ -150,28 +147,12 @@ func (p *Pool) Ensure(d platform.PlatformDriver) (*Instance, error) {
 		}
 	}
 
-	inst, err := launch(d, entry, wantHeadless)
+	inst, err := launch(d, entry)
 	if err != nil {
 		return nil, err
 	}
 	p.instances[d.Name()] = inst
 	return inst, nil
-}
-
-// effectiveHeadless 无桌面环境时强制 headless，保证在服务器/手机端也能跑。
-func effectiveHeadless(prefer bool) bool {
-	if prefer {
-		return true
-	}
-	return !hasDisplay()
-}
-
-// hasDisplay 判断当前是否有可用图形桌面。
-func hasDisplay() bool {
-	if runtime.GOOS == "linux" {
-		return os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
-	}
-	return true // windows/darwin 始终有图形会话
 }
 
 func (p *Pool) OpenLogin(d platform.PlatformDriver) (*Instance, error) {
@@ -186,7 +167,7 @@ func (p *Pool) OpenLogin(d platform.PlatformDriver) (*Instance, error) {
 	return inst, nil
 }
 
-func launch(d platform.PlatformDriver, entry account.Entry, headless bool) (*Instance, error) {
+func launch(d platform.PlatformDriver, entry account.Entry) (*Instance, error) {
 	if err := ensureProfileDir(entry.ProfileDir); err != nil {
 		return nil, err
 	}
@@ -194,7 +175,7 @@ func launch(d platform.PlatformDriver, entry account.Entry, headless bool) (*Ins
 
 	l := launcher.New().
 		UserDataDir(entry.ProfileDir).
-		Headless(headless).
+		Headless(true).
 		Set("--no-sandbox").
 		Set("--mute-audio").
 		// ---- 省内存 / 减进程 ----
@@ -223,7 +204,6 @@ func launch(d platform.PlatformDriver, entry account.Entry, headless bool) (*Ins
 		driver:   d,
 		profile:  entry.ProfileDir,
 		proxy:    entry.Proxy,
-		headless: headless,
 		browser:  b,
 		page:     page,
 	}
@@ -458,7 +438,7 @@ func (p *Pool) ApplyConfig() {
 		if entry.ProfileDir == "" {
 			entry = account.Entry{ProfileDir: cfg.ProfileDir, Proxy: cfg.Proxy}
 		}
-		if inst.profile != entry.ProfileDir || inst.proxy != entry.Proxy || inst.headless != effectiveHeadless(cfg.Headless) {
+		if inst.profile != entry.ProfileDir || inst.proxy != entry.Proxy {
 			inst.close()
 			delete(p.instances, name)
 		}
