@@ -1,0 +1,27 @@
+server:
+  host: "127.0.0.1"
+  port: 8080
+  admin_path: /admin
+
+platforms:
+  deepseek:
+    enabled: true
+    profile_dir: ./profiles/deepseek
+    proxy: ""
+    max_concurrency: 1
+    min_interval: 2s
+    request_limit: 150
+  kimi:
+    enabled: true
+    profile_dir: ./profiles/kimi
+    proxy: ""
+    max_concurrency: 1
+    min_interval: 2s
+    request_limit: 150
+  qwen:
+    enabled: true
+    profile_dir: ./profiles/qwen
+    proxy: ""
+    max_concurrency: 1
+    min_interval: 2s
+    request_limit: 150

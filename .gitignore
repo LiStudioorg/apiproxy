@@ -1,0 +1,10 @@
+# 编译产物
+/web2api
+*.exe
+
+# 浏览器用户数据（含 Cookie，切勿提交）
+/profiles/
+/profiles-test/
+
+# 本地配置变体
+config.local.yaml

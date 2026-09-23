@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>web2api 管理界面</title>
+<style>
+  :root { --bg:#0f1115; --card:#171b22; --line:#262c37; --fg:#e6e9ef; --dim:#8b93a3; --accent:#4f8cff; --ok:#3ecf8e; --warn:#f5a623; --err:#ff5f56; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
+  header h1 { font-size:18px; margin:0; }
+  header .base { color:var(--dim); font-size:13px; }
+  main { padding:24px; max-width:960px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:16px; overflow:hidden; }
+  .card .hd { padding:12px 16px; border-bottom:1px solid var(--line); font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  .card .bd { padding:8px 0; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 16px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  tr:last-child td { border-bottom:none; }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:12px; border:1px solid var(--line); }
+  .pill.ok { color:var(--ok); border-color:rgba(62,207,142,.4); }
+  .pill.warn { color:var(--warn); border-color:rgba(245,166,35,.4); }
+  .pill.err { color:var(--err); border-color:rgba(255,95,86,.4); }
+  .pill.dim { color:var(--dim); }
+  button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:6px 14px; cursor:pointer; font-size:13px; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--fg); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .mono { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--dim); }
+  .hint { color:var(--dim); font-size:13px; padding:2px 16px 14px; }
+  a { color:var(--accent); }
+  .row { display:flex; gap:8px; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>web2api</h1>
+  <span class="base">OpenAI 兼容聚合 API</span>
+  <span class="pill dim" id="apiBase">Base URL: /v1</span>
+</header>
+<main>
+  <div class="card">
+    <div class="hd"><span>平台状态</span><span class="row"><button class="ghost" onclick="refresh()">刷新</button></span></div>
+    <div class="bd">
+      <table>
+        <thead><tr><th>平台</th><th>状态</th><th>登录</th><th>今日请求</th><th>Profile</th><th>操作</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="hint">首次使用：点击对应平台的「打开登录页」，在弹出的浏览器窗口中手动登录，登录成功后状态变为「已登录」。平台未启动浏览器时状态显示未知。</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="hd">调用方式</div>
+    <div class="bd">
+      <div class="hint mono">curl http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"deepseek","messages":[{"role":"user","content":"你好"}],"stream":true}'</div>
+    </div>
+  </div>
+</main>
+<script>
+const rows = document.getElementById('rows');
+
+async function refresh() {
+  const r = await fetch('/admin/api/status');
+  const data = await r.json();
+  rows.innerHTML = '';
+  for (const p of data.platforms) {
+    const tr = document.createElement('tr');
+    const status = p.running ? `<span class="pill ok">运行中</span>` : `<span class="pill dim">未启动</span>`;
+    const login = p.logged_in === true ? '<span class="pill ok">已登录</span>' : (p.logged_in === false ? '<span class="pill err">未登录</span>' : '<span class="pill warn">未知</span>');
+    const enabled = p.enabled ? '' : '<span class="pill warn">已禁用</span>';
+    tr.innerHTML = `
+      <td><b>${p.name}</b></td>
+      <td><span class="row">${status}${enabled}</span></td>
+      <td>${login}</td>
+      <td>${p.today_requests}</td>
+      <td class="mono">${p.profile_dir}</td>
+      <td><span class="row">
+        <button onclick="doLogin('${p.name}', this)">打开登录页</button>
+        <button class="ghost" onclick="doRefresh('${p.name}', this)">检测登录</button>
+      </span></td>`;
+    rows.appendChild(tr);
+  }
+}
+
+async function doLogin(name, btn) {
+  btn.disabled = true;
+  btn.textContent = '启动中…';
+  const r = await fetch('/admin/api/login/' + name, { method: 'POST' });
+  const d = await r.json();
+  if (d.error) { alert(d.error); } else { btn.textContent = '已打开'; }
+  setTimeout(() => { btn.disabled = false; btn.textContent = '打开登录页'; }, 3000);
+}
+
+async function doRefresh(name, btn) {
+  btn.disabled = true;
+  const r = await fetch('/admin/api/refresh/' + name);
+  const d = await r.json();
+  alert(d.logged_in ? name + '：已登录' : name + '：未登录');
+  btn.disabled = false;
+  refresh();
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
