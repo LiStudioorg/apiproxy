@@ -22,8 +22,9 @@ session_ttl = "24h"       # 管理会话有效期
 api_keys = []
 
 # ---- 平台（每平台一个 [platforms.xxx] 表） ----
-# headless = true  无需桌面环境（服务器/手机终端），登录用管理界面的「浏览器画面」
-# headless = false 有桌面时会直接弹出浏览器窗口
+# headless 会自动判断：检测到无桌面环境（DISPLAY/WAYLAND_DISPLAY 为空）自动切无头，
+#          有桌面则弹出浏览器窗口。「浏览器画面」登录在两种模式下都能用，不需要手动改这里的值。
+#          仅当你想在“有桌面”时也强制无头，才把 headless 填为 true。
 # accounts = 可选多账号轮换（无桌面时每账号独立 profile，达 request_limit 自动切换）
 # max_concurrency = 该平台同时进行的流式对话数（每个并发开一个独立 Tab，同一浏览器内核/同 Cookie，聊天完自动关 Tab 释放内存）
 #   注意：同一账号同时多点并发容易被平台风控，建议个人使用不超过 2-3。
@@ -31,7 +32,6 @@ api_keys = []
 enabled = true
 profile_dir = "./profiles/deepseek"
 proxy = ""              # 可选，如 http://127.0.0.1:7890
-headless = true
 max_concurrency = 3
 min_interval = "2s"
 request_limit = 100
@@ -40,7 +40,6 @@ request_limit = 100
 enabled = true
 profile_dir = "./profiles/kimi"
 proxy = ""
-headless = true
 max_concurrency = 3
 min_interval = "2s"
 request_limit = 100
@@ -49,7 +48,6 @@ request_limit = 100
 enabled = true
 profile_dir = "./profiles/qwen"
 proxy = ""
-headless = true
 max_concurrency = 3
 min_interval = "2s"
 request_limit = 100
