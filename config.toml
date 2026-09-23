@@ -1,0 +1,55 @@
+# ============ web2api 配置文件（项目根目录单份 config.toml） ============
+# 修改后保存即可自动热加载。
+
+# ---- 服务监听 ----
+[server]
+host = "0.0.0.0"
+port = 8080
+# HTTPS 开关：tls = true 时启用（需提供证书与私钥，可配合自签证书，浏览器会提示不受信任）
+tls = false
+tls_cert = ""
+tls_key = ""
+# 请求队列：缓冲上限（满则返回 HTTP 429）+ 并发 worker 数（同时处理的请求数，建议 ≥ 各平台 max_concurrency 之和）
+queue_capacity = 64
+queue_workers = 6
+
+# ---- 认证 ----
+[auth]
+enabled = false           # 管理界面登录开关，开启后需在下方手动设置 password
+password = ""             # 管理界面密码（手动填写，程序不自动生成）
+session_ttl = "24h"       # 管理会话有效期
+# /v1 接口 Bearer 密钥，请自己填写，支持多个；留空则 /v1 不鉴权
+api_keys = []
+
+# ---- 平台（每平台一个 [platforms.xxx] 表） ----
+# headless = true  无需桌面环境（服务器/手机终端），登录用管理界面的「浏览器画面」
+# headless = false 有桌面时会直接弹出浏览器窗口
+# accounts = 可选多账号轮换（无桌面时每账号独立 profile，达 request_limit 自动切换）
+# max_concurrency = 该平台同时进行的流式对话数（每个并发开一个独立 Tab，同一浏览器内核/同 Cookie，聊天完自动关 Tab 释放内存）
+#   注意：同一账号同时多点并发容易被平台风控，建议个人使用不超过 2-3。
+[platforms.deepseek]
+enabled = true
+profile_dir = "./profiles/deepseek"
+proxy = ""              # 可选，如 http://127.0.0.1:7890
+headless = true
+max_concurrency = 3
+min_interval = "2s"
+request_limit = 100
+
+[platforms.kimi]
+enabled = true
+profile_dir = "./profiles/kimi"
+proxy = ""
+headless = true
+max_concurrency = 3
+min_interval = "2s"
+request_limit = 100
+
+[platforms.qwen]
+enabled = true
+profile_dir = "./profiles/qwen"
+proxy = ""
+headless = true
+max_concurrency = 3
+min_interval = "2s"
+request_limit = 100

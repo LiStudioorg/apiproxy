@@ -7,4 +7,4 @@
 /profiles-test/
 
 # 本地配置变体
-config.local.yaml
+/config.local.toml

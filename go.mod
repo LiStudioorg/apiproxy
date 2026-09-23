@@ -3,9 +3,10 @@ module web2api
 go 1.27.1
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/go-rod/rod v0.116.2
 	github.com/go-rod/stealth v0.4.9
-	gopkg.in/yaml.v3 v3.0.1
+	github.com/gorilla/websocket v1.5.3
 )
 
 require (

@@ -1,52 +1,95 @@
+// Package account 提供每平台多账号（Profile）的轮换管理。
+// 每个账号对应一个独立的浏览器 UserDataDir（/ proxy），互不干扰 Cookie 会话。
 package account
 
 import (
 	"fmt"
-	"strings"
 	"sync"
+	"time"
+
+	"web2api/internal/config"
 )
 
-type Account struct {
-	Name  string
-	Proxy string
-}
+type Entry = config.AccountConfig
 
+// Pool 管理单平台的一组账号，跟踪当前账号的今日请求量。
 type Pool struct {
-	mu       sync.Mutex
-	accounts []Account
-	idx      int
-	count    int64
-	limit    int64
+	mu      sync.Mutex
+	name    string
+	entries []Entry
+	idx     int
+	used    int64
+	day     string
 }
 
-func New(accounts []Account, limit int64) *Pool {
-	return &Pool{accounts: accounts, limit: limit}
+func New(name string, entries []Entry) *Pool {
+	if len(entries) == 0 {
+		entries = []Entry{{ProfileDir: "./profiles/" + name}}
+	}
+	return &Pool{name: name, entries: entries, day: today()}
 }
 
-func (p *Pool) Pick() (Account, error) {
+func today() string { return time.Now().Format("2006-01-02") }
+
+// Current 返回当前账号（不轮换）。
+func (p *Pool) Current() Entry {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if len(p.accounts) == 0 {
-		return Account{}, fmt.Errorf("无可用账号")
-	}
-	if p.limit > 0 && p.count >= p.limit*int64(len(p.accounts)) {
-		p.count = 0
-	}
-	a := p.accounts[p.idx%len(p.accounts)]
-	p.idx++
-	return a, nil
+	p.rollDay()
+	return p.entries[p.idx%len(p.entries)]
 }
 
-func (p *Pool) NoteSuccess() {
+// MarkUsed 记一次请求。
+func (p *Pool) MarkUsed() {
 	p.mu.Lock()
-	p.count++
-	p.mu.Unlock()
+	defer p.mu.Unlock()
+	p.rollDay()
+	p.used++
 }
 
-func Describe(accounts []Account) string {
-	names := make([]string, 0, len(accounts))
-	for _, a := range accounts {
-		names = append(names, a.Name)
+// Used 当前账号今日用量。
+func (p *Pool) Used() int64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.rollDay()
+	return p.used
+}
+
+// ShouldRotate 判断当前账号是否已达到单日配额（limit=0 表示不限）。
+func (p *Pool) ShouldRotate(limit int64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.rollDay()
+	return limit > 0 && p.used >= limit && len(p.entries) > 1
+}
+
+// Rotate 切到下一个账号并清零今日用量，返回新账号。
+func (p *Pool) Rotate() Entry {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.rollDay()
+	p.idx++
+	p.used = 0
+	return p.entries[p.idx%len(p.entries)]
+}
+
+// Index 当前账号序号（日志用）。
+func (p *Pool) Index() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.idx%len(p.entries) + 1
+}
+
+func (p *Pool) String() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return fmt.Sprintf("%s[账号%d/%d @%s used=%d]", p.name, p.idx%len(p.entries)+1, len(p.entries), p.entries[p.idx%len(p.entries)].ProfileDir, p.used)
+}
+
+// rollDay 跨天时清空今日用量。
+func (p *Pool) rollDay() {
+	if d := today(); d != p.day {
+		p.day = d
+		p.used = 0
 	}
-	return strings.Join(names, ", ")
 }

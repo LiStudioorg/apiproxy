@@ -1,6 +1,10 @@
 package platform
 
-import "github.com/go-rod/rod"
+import (
+	"errors"
+
+	"github.com/go-rod/rod"
+)
 
 type kimiDriver struct{}
 
@@ -23,13 +27,13 @@ func (d *kimiDriver) LoginCheck(page *rod.Page) (bool, error) {
 	return ok, err
 }
 
-func (d *kimiDriver) ParseSSEChunk(raw []byte) (string, bool) {
+func (d *kimiDriver) ParseSSEChunk(raw []byte) (string, bool, error) {
 	if IsDone(raw) {
-		return "", true
+		return "", true, nil
+	}
+	if msg, ok := IsUpstreamError(raw); ok {
+		return "", true, errors.New(msg)
 	}
 	delta, done := JSONDelta(raw)
-	if done {
-		return delta, true
-	}
-	return delta, false
+	return delta, done, nil
 }

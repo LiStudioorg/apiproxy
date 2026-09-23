@@ -180,14 +180,14 @@ for raw := range topic {
 web2api-go/
 ├── main.go
 ├── go.mod
-├── config.yaml
+├── config.toml
 ├── AGENTS.md                  # 本文件：方案与注意事项
 ├── README.md                  # 面向用户的使用说明
 ├── api/
 │   └── types.go               # OpenAI 兼容类型
 ├── internal/
 │   ├── config/
-│   │   └── config.go          # config.yaml 加载 + 热加载
+│   │   └── config.go          # 根目录单份 config.toml 加载（[server]/[auth]/[platforms]）+ 文件 mtime 热加载
 │   ├── browser/
 │   │   ├── pool.go            # BrowserPool 管理 + CDP dataReceived 捕获 + 发消息编排
 │   │   └── lifecycle.go       # 保活
@@ -264,7 +264,7 @@ var platformConfigs = map[string]PlatformConfig{
 
 - 单二进制：`go build -o web2api`，无额外依赖。
 - 管理界面：`http://localhost:8080/admin`，显示各平台登录状态、今日请求次数、代理配置。
-- 配置热加载：`config.yaml` 支持运行时修改平台配置。
+- 配置热加载：根目录 `config.toml` 保存即热加载。
 - 日志：记录模型、平台、耗时、状态；**不记录** prompt 与回复内容。
 
 ---

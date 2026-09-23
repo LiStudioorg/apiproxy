@@ -11,7 +11,8 @@
 - **真实浏览器请求**：TLS 指纹、Cookie、行为特征与真人一致，封号风险远低于纯 HTTP 逆向。
 - **统一 OpenAI 接口**：`/v1/chat/completions`，支持 SSE 流式输出，兼容所有主流客户端。
 - **多平台聚合**：一个程序管理十几个网页端 AI 平台。
-- **Web 管理界面**：可视化登录、查看登录状态与请求统计。
+- **Web 管理界面**：可视化登录（支持无桌面「浏览器画面」）、实时请求日志、登录状态与请求统计。
+- **请求队列 + 账号池**：有界队列（满则 HTTP 429）、多账号按 `request_limit` 自动轮换。
 - **单二进制部署**：`go build` 一次，拷贝即用。
 - **易维护**：平台改版时，只改选择器和监听的 URL 即可。
 
@@ -34,19 +35,21 @@ go build -o web2api
 ### 3. 运行
 
 ```bash
-./web2api                 # 默认加载 config.yaml
-./web2api -config my.yaml # 指定配置文件
+./web2api                 # 默认加载 config.toml
+./web2api -config my.toml # 指定配置文件
 ```
 
 启动后打开管理界面：
 
 ```
-http://localhost:8080/admin
+http://localhost:8080
 ```
+
+> 管理密码在 `config.toml` 的 `[auth] password` 中自行配置（默认不开启登录）；`/v1` 需 `Authorization: Bearer <API Key>`。
 
 ### 4. 登录平台
 
-在管理界面中，依次点击各平台标签页，在弹出的浏览器窗口中手动登录。登录状态会自动保存在浏览器 Profile 中，之后无需重复登录。
+在管理界面点「打开登录页」拉起浏览器登录；**无桌面环境（服务器 / 手机端）不需要显示器**——点「浏览器画面」即可在管理界面内直接操作浏览器完成扫码/输密码登录。登录状态自动保存在浏览器 Profile 中，之后无需重复登录。
 
 ### 5. 使用 API
 
@@ -55,7 +58,7 @@ http://localhost:8080/admin
 | 项 | 值 |
 |----|----|
 | Base URL | `http://localhost:8080/v1` |
-| API Key | 任意非空字符串（如 `sk-local`） |
+| API Key | `config.toml` 的 `[auth] api_keys` 中配置的值（留空则不鉴权） |
 | Model | 见下表 |
 
 也可直接用 curl 测试：
@@ -95,34 +98,32 @@ curl http://localhost:8080/v1/chat/completions \
 
 ## 配置
 
-编辑 `config.yaml`：
+根目录单份 `config.toml`（TOML），改后保存即热加载。包含 `[server]`、`[auth]`、`[platforms.xxx]` 三块：
 
-```yaml
-server:
-  port: 8080
-  admin_path: /admin
+```toml
+[server]
+host = "0.0.0.0"
+port = 8080
+tls = false            # HTTPS 开关，开启需填 tls_cert / tls_key
+tls_cert = ""
+tls_key = ""
+queue_capacity = 32    # 请求队列缓冲上限（满则 HTTP 429）
+queue_workers = 1      # 并发请求上限
 
-platforms:
-  deepseek:
-    enabled: true
-    profile_dir: ./profiles/deepseek
-    proxy: ""            # 可选，如 http://127.0.0.1:7890
-    headless: false      # 无显示器环境（服务器/终端）请设为 true
-    max_concurrency: 1
-    min_interval: 2s
-    request_limit: 150   # 达阈值自动切换备用账号
+[auth]
+enabled = false        # 管理界面登录开关，密码绝不自动生成，需手动填写
+password = "手动填入"
+api_keys = []          # /v1 Bearer 密钥，留空则不鉴权
 
-  qwen:
-    enabled: true
-    profile_dir: ./profiles/qwen
-    proxy: ""
-    headless: false
-    max_concurrency: 1
-    min_interval: 2s
-    request_limit: 150
+[platforms.deepseek]
+enabled = true
+profile_dir = "./profiles/deepseek"
+proxy = ""             # 可选，如 http://127.0.0.1:7890
+headless = true        # 无桌面环境（服务器/终端）填 true，用管理界面「浏览器画面」登录
+max_concurrency = 1
+min_interval = "2s"
+request_limit = 150    # 达阈值自动切换备用账号（可配 accounts 多账号）
 ```
-
-修改后保存即可生效（热加载）。
 
 ---
 
